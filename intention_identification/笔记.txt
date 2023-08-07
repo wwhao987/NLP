@@ -1,0 +1,124 @@
+对话意图识别项目
+    功能：基于给定的文本，判断该文本对应的意图信息是什么，方便后续的链路进行数据处理
+    操作：
+        -1. 数据整理:
+            -a. 提取具体有哪些意图:
+                -b1. 直接返回意图类型名称列表:
+                    [
+                      'Alarm-Update', 'Audio-Play', 'Calendar-Query', 'FilmTele-Play',
+                      'HomeAppliance-Control', 'Music-Play', 'Other', 'Radio-Listen',
+                      'TVProgram-Play', 'Travel-Query', 'Video-Play', 'Weather-Query'
+                    ]
+            -b. 借鉴一下TORCHTEXT(torchtext)简化一下数据加载相关的代码逻辑:
+                -b1. 安装torchtext
+                    pip install torchtext==0.11.1
+                -b2. torchtext demo代码的展示
+            -c. Token处理、词典处理:
+                Token处理: 词、字、笔划特征
+                词典处理：构建词典、特殊词(停止词、填充词、未知词)处理
+            -d. Dataset构建、DataLoader构建
+        -2. 模型构建
+            -a. 选择RNN/LSTM/GRU + FC的模型
+                -a1. RNN + FC
+                -a2. LSTM + FC
+                -a3. GRU + FC
+                NOTE: models.py文件名称更改为models_original.py 保留原始代码
+                -a4. 模型代码做一定的提炼
+        -4. 模型训练、评估相关代码构建
+            -a. Trainer、Evaluator
+            -b. 需要在PyTorch中加入运行期间的可视化机制，以保证对运行效果进行监控: 基于TensorFlow的tensorboard来实现
+                -b1. 安装依赖库：pip install tensorflow
+                -b2. 代码中加入必要的代码
+                -b3. 在命令行执行如下命令:
+                    tensorboard --logdir D:\workspaces\study\RNNProject10\intention_identification\datas\output\v2\summary
+        -5. 训练方式：
+            -1. 直接设置学习率=0.1, 惩罚性系数=0.01
+                模型训练不收敛，产生原因：学习率太大了，前期加入的惩罚性系数有点限制模型的收敛。
+            -2. 学习率=0.01， 惩罚性系数=0.0
+                过拟合、并且随着训练次数的增加，训练集上的效果变成呈现: 先变好再变差的情况
+                产生原样：学习率过大，会跳过全局最优解
+                优点：前期可以快速逼近全局最优解
+                日志: log_lr0.01_weightdecay0.0_01_新训练.log
+            -3. 两阶段的训练：
+                第一阶段：学习率=0.001, 惩罚性系数=0.0, 学习65个epoch后
+                第二阶段：学习率=0.001, 惩罚性系数=0.01, 学习5个epoch即可
+                日志: log_lr0.001_weightdecay0.0_02_新训练.log、log_lr0.001_weightdecay0.01_03_基于02的基础上训练.log
+            NOTE:
+                -1. 大的学习率可以让模型前期快速逼近全局最优解，但是后期可能会导致模型不收敛；
+                -2. 小的学习率更新的步长比较小的，逼近全局最优解的速度是比较慢，但是在后期的时候，可以让模型缓慢的收敛到最优解位置；
+                -3. 惩罚项可以防止模型过拟合、增加训练数据也可以防止模型过拟合(普通的增加数据、数据增强)；
+            扩展：数据增强
+                -1. 更改一下文本x的token顺序
+                -2. Mask Token操作：随机将部分token进行掩盖操作
+                -3. 同义词替换、同实体词替换、同音词的替换、拼音替换等等
+        -6. 模型部署：
+            整体角度理解：
+                -a. 模型部署就是给调用方(前端程序、后端程序....)提供一个接口(http接口、rpc接口....)
+                -b. 方式:
+                    -b1. 部署到各种机器学习/深度学习平台/云平台，比如：阿里云的PAI、亚马逊云的SageMaker...
+                        阿里云的PAI部署步骤：
+                            参考：
+                                https://pai.console.aliyun.com/?regionId=cn-shenzhen#/sw?path=/eas
+                                https://help.aliyun.com/document_detail/110980.html?spm=5176.pai-console-inland.help.dexternal.4f5e642dr9sja6
+                                https://help.aliyun.com/document_detail/130248.html?spm=a2c4g.143419.0.0.680c6f27ipVzHo
+                                https://help.aliyun.com/document_detail/450525.html?spm=a2c4g.111029.0.0.765417ebaOWEF1
+                                https://help.aliyun.com/document_detail/250807.html?spm=a2c4g.250805.0.0.30d083b8bsaf8c
+                                https://help.aliyun.com/document_detail/449809.html?spm=a2c4g.250807.0.0.38ad44bdMp0IuK
+                                https://cr.console.aliyun.com/cn-hangzhou/instance/dashboard
+                            准备的内容/资源：
+                                -a. 一个阿里云的账号
+                                -b. 一台阿里云的ECS服务器(Linux服务器)
+                                -c. 在阿里云ACR中创建一个保存镜像的"位置/仓库", 创建一个命名空间以及修改密码
+                                -d. 准备一个阿里云OSS账户
+                            -b1.1 制作Docker镜像，并上传到镜像库中
+                                -1-. 在Linux服务器上安装docker软件，并启动docker服务
+                                    https://www.runoob.com/docker/docker-tutorial.html
+                                -2-. Docker镜像构建，linux执行如下命令:
+                                    docker login --username=1941046624@qq.com registry.cn-shanghai.aliyuncs.com
+                                    docker run -ti registry.cn-shanghai.aliyuncs.com/eas/eas-python-base-image:py3.6-allspark-0.8
+                                    docker run -ti registry.cn-shanghai.aliyuncs.com/gerry_ai/eas-develop:0.1
+                                    # 在容器内安装服务依赖的环境
+                                    ENV/bin/pip install torchtext==0.11.1 jieba tqdm
+                                    # 推出容器，但是需要记住容器id: d3cd8d1be465
+                                    docker commit d3cd8d1be465 registry.cn-shanghai.aliyuncs.com/gerry_ai/eas-deploy:v1.0
+                                    docker push registry.cn-shanghai.aliyuncs.com/gerry_ai/eas-deploy:v1.0
+                            -b1.2 基于该镜像进行部署: 进行必要的配置文件的编写即可
+                                -NOTE-: 相当于将待运行的代码、模型、数据全部放入到镜像中，然后执行启动镜像服务（端口映射 -- 主机的端口和容器内部的端口映射）
+                                -1-. 编写pai的执行逻辑python代码，主要包括：预测器加载、数据预测及结果处理返回，即: intention_identification_app_pai.py
+                                -2-. 将代码和模型分别上传到oss上的对应文件夹中
+                                -3-. 配置EAS部署服务
+                                -4-. 连接测试: 直接EAS服务上测试、HTTP测试(接口测试)、SDK测试(代码)
+                                    curl http://1757826125271350.cn-shenzhen.pai-eas.aliyuncs.com/api/predict/nlp_intention_identification -H 'Authorization: NTZiZmY3NWU2ZDlhYjQ4ZDE3YmM4ZGUxYzYxMjc2NjU1NGM5NWFhZA==' -d '下周三五点提醒我购买5月1日上海到北京的车票'
+                    -b2. 基于Python语言提供一个http接口/web服务
+                        -b2.1 裸服务器部署的方式，直接将写好的web服务上传到linux服务器，执行python命令启动web服务即可
+                        -b2.2 基于Docker容器的方式进行部署，将写好的web服务代码copy到容器内，然后在容器内通过python命令启动web服务即可
+                            --- 相比于b2.1这个方式，基于Docker的方式更加方面运维的监控
+                            --- 参考:
+                                https://blog.csdn.net/lzc2644481789/article/details/124888223
+                            -NOTE-:
+                                基于：Docker + Jenkins + Git来实现的
+                                -1-. 编写Dockerfile文件
+                                -2-. 编写jenkins的相关配置信息、直接配置好点击即可
+                                    下载所有需要的内容(从git上下载)
+                                    docker build -t intention_identification:v1 .
+                                    将镜像推送到远程的服务器上(部署服务器)
+                                    docker run -ti intention_identification:v1
+                                    docker run -ti intention_identification:v1 /bin/bash # 覆盖镜像里面的CMD启动命令
+                    -b3. 基于Java/C++等语言提供一个http接口/web服务
+                        -NOTE: 部署上同b2。唯一需要注意的就是，需要将模型转换为其它格式(java/c++等语言中的深度学习框架可以加载模型)
+                    -b4. 将模型转换为C++支持的结构，进行边端化处理 --> 一般用于图像领域
+            Python实现Web服务接口:
+                -1. Python的web框架: Flask、Diango
+                -2. Flask参考网络：
+                    https://dormousehole.readthedocs.io/en/latest/
+                -3. 安装方式:
+                    pip install flask==1.1.2
+                -4. postman安装：
+                    一般情况下，我们需要通过postman来测试我们算法的服务接口是否正常
+                    https://www.postman.com/
+                -5. 代码编写：
+                    -5.1 编写本地测试predictor对象(模型恢复、预测方法等)，并且完成本地测试
+                    -5.2 编写web相关的代码(获取接口入参、入参检测处理、调用predictor对象获取预测结果、结果返回), 并完成本地测试
+                    -5.3 直接将写好的代码(模块代码 + 入口代码)全部放到服务器上，然后命令行执行即可
+                        nohup python intention_identification_run.py >intention.log 2>&1 &
+
