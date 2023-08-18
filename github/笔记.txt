@@ -1,0 +1,85 @@
+适用领域:
+    x: Seq1 ---> y: Seq2 一一对应，一个字对应一个预测标签
+        x: 我    爱   中       国
+        y:  O    O    B-LOC   E-LOC
+            我 --> O
+            爱 --> O
+            中 --> B-LOC
+            国 --> E-LOC
+一、数据处理
+    1. 标签的标注方式：BMES的结构
+        B-疾病类型 M-疾病类别 ....
+        B-手术 M-手术
+    2. 数据集的结构形式
+    3. DataLoader的相关处理
+        a. 以字作为输入 + 字对应是否是关键类别类特征作为输入(词表映射)
+        b. 字向量的初始值可以基于Char2Vec做初始化，也可以随机
+        c. 异常词的处理: 填充、未知词
+二、模型的搭建
+    0. 模型结构:
+        [LM:语言模型->将字转换为向量] + Encoder:特征提取 + Classify:决策输出
+        --->
+            LM: Embedding、Bert、ALBert、RoBERTa、NEZHA..... --> 输入形状:[N,T],输出形状:[N,T,E1]
+                LM语言模型一般情况下采用迁移学习的方式，使用别人开源出来的训练好的基础模型，在我们当前数据集上重新适应性的调整即可
+                    两种不同的融合方式：
+                        -1. 冻结(不学习)迁移过来的基础语言模型中的参数，让其在当前任务中不进行参数更新
+                        -2. 针对这部分参数采用非常小的学习率进行更新
+                https://github.com/huawei-noah/Pretrained-Language-Model
+                https://github.com/lonePatient/NeZha_Chinese_PyTorch
+                https://huggingface.co/
+            Encoder: BiLSTM、Transformer、CNN...... --> 输入形状:[N,T,E1],输出形状:[N,T,E2]
+                考虑点：
+                                | Bi-LSTM   |  ID-CNN |     Transformer |   R-Transformer
+                    方向信息    |    高       |  差     |         差      |     中
+                    相对距离信息  |   高      |    差    |        差       |     中
+                    局部信息    |   差        |   高    |        差       |     高
+                    长距离依赖   |   中       |   差    |        高       |     高
+                    可并行(效率) |   差       |   高    |        高       |     中
+                https://github.com/crownpku/Information-Extraction-Chinese/tree/master/NER_IDCNN_CRF
+                R-Transformer: Recurrent Neural Network Enhanced Transformer
+                https://arxiv.org/pdf/1907.05572.pdf
+                https://github.com/DSE-MSU/R-transformer
+            Classify: FC+Softmax、FC+CRF  ---> 输入形状:[N,T,E2],输出形状:[N,T]或者loss
+    1. 基础模型选择: Bi-LSTM + FC + Softmax
+    2. 模型的演进:
+        Bi-LSTM + FC + CRF
+        Bert(Transformer、Attention、ALBert) + (Bi-LSTM) + FC + CRF
+        参考：
+            https://huggingface.co/
+三、代码说明
+    - preprocess.py: 最原始的代码，将原始文件转换为NER需要的数据文件
+    - dataloader.py: 定义模型训练需要的Dataloader对象，可以返回Tensor对象
+    - dataloader_utils.py: 定义dataloader构建过程中，相关的方法工具类
+    - utils.py: 全局通用的工具类、参数、方法等。
+=======================================================================
+命名实体识别在实际业务场景中的应用：
+    -1. 独立使用：基于给定的文本，使用模型提取出文本中的实体，eg:搜索.....
+        搜索简单逻辑理解：
+            -a. 分析/解析用户给定的搜索语句(query)
+            -b. 从数据库中提取大量的候选商品列表(商品数量级从海量的级别 --> 万/千级别)
+            -c. 从候选商品中提取用户可能感兴趣的商品/更加匹配query的商品(万/千级别 --> 百/十级别)
+            NOTE: 命名实体识别可以先对query进行实体提取，然后基于提取出来的实体获取匹配的候选商品列表
+    -2. 和关系抽取一起使用(知识图谱):
+        -a. 从文本中提取出实体，并且构建实体与实体之间的关系；最终将实体以及关系保存到图数据库中 --> 构建知识图谱
+        -b. 知识图谱的应用：
+            -1- 风控: 构建企业、老板、借贷、逾期等等之间的关系，如果说需要判断是否存在风险的时候，直接从周边属性进行判断
+            -2- 故障检测：可以将故障、故障的表现以及解决方案之间的构建构建好，当设备出现某些表现的时候，是不是就给定给出可能的故障以及对应的解决方案
+关系抽取
+    基本概念：
+        实体：我们任务关注的token整体
+        主体：关系描述中的一种实体类别，比如: 姚明的妻子是叶莉 --> 主体就是: 姚明
+        客体：关系描述中的一种实体类别，比如: 姚明的妻子是叶莉 --> 客体就是: 叶莉
+        关系：两个实体之间的联系，比如: 姚明的妻子是叶莉 --> 关系就是: 妻子
+        关系表达形式：三元组或者二元组的描述，eg:
+            (姚明，妻子，叶莉)、(叶莉、丈夫、姚明)、(姚明、身高226cm)
+            (姚明、身高226cm) --> (姚明、属性、身高226cm)
+    参考：
+        https://www.modb.pro/db/472588
+        https://zhuanlan.zhihu.com/p/375425216
+        https://zhuanlan.zhihu.com/p/443195014
+        https://zhuanlan.zhihu.com/p/350041514
+        https://www.ngui.cc/el/975389.html?action=onClick
+        https://github.com/princeton-nlp/PURE
+        https://github.com/lavis-nlp/spert
+        https://zhuanlan.zhihu.com/p/544902025
+        https://zhuanlan.zhihu.com/p/495588620
